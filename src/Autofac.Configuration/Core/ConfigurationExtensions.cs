@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.IO;
+using System.Reflection;
 using System.Reflection;
 using Autofac.Configuration.Util;
 using Autofac.Core;
@@ -78,7 +80,16 @@ namespace Autofac.Configuration.Core
                 return null;
             }
 
-            return Assembly.Load(new AssemblyName(assemblyName));
+            try
+            {
+                return Assembly.Load(new AssemblyName(assemblyName));
+            }
+            catch (FileNotFoundException)
+            {
+            }
+
+			// I didn't check for the edge case if it is an executable.
+            return Assembly.LoadFrom($"{assemblyName}.dll");
         }
 
         /// <summary>
@@ -217,7 +228,27 @@ string.Equals(prop.Name, parameterName, StringComparison.OrdinalIgnoreCase);
 
             if (type == null)
             {
-                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, ConfigurationResources.TypeNotFound, typeName));
+                var typeNameParts = typeName.Replace(" ", string.Empty).Split(',');
+
+                if (typeNameParts.Length == 2)
+                {
+                    var assemblyTypeName = typeNameParts[0];
+                    var assemblyName = typeNameParts[1].Trim();
+
+                    string assemblyFile = $"{assemblyName}.dll";
+                    if (string.IsNullOrWhiteSpace(assemblyFile))
+                    {
+                        return null;
+                    }
+
+                    var assembly = Assembly.LoadFrom(assemblyFile);
+
+                    type = assembly.GetType(assemblyTypeName);
+                }
+                else
+                {
+                    throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, ConfigurationResources.TypeNotFound, typeName));
+                }
             }
 
             return type;
